@@ -10,10 +10,13 @@ public interface ISpecification<T>
     Expression<Func<T, object>>? OrderBy { get; }
     Expression<Func<T, object>>? OrderByDesending { get; }
     bool IsDistinct {get;}
-
+    int Take {get;}
+    int Skip { get; }
+    bool IsPagingEnabled { get; }
+    IQueryable<T> ApplyCriteria(IQueryable<T> query);
 }
 
 public interface ISpecification<T, TResult> : ISpecification<T>
 {
-    Expression<Func<T, TResult>>? select { get; }
+    Expression<Func<T, TResult>>? Select { get; }
 }
