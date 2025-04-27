@@ -11,7 +11,7 @@ namespace Infrastructure.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.RenameColumn(
-                name: "PictureURL",
+                name: "PictureUrl",
                 table: "Products",
                 newName: "PictureUrl");
         }
@@ -22,7 +22,7 @@ namespace Infrastructure.Migrations
             migrationBuilder.RenameColumn(
                 name: "PictureUrl",
                 table: "Products",
-                newName: "PictureURL");
+                newName: "PictureUrl");
         }
     }
 }
