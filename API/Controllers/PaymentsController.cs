@@ -17,7 +17,7 @@ public class PaymentsController(IPaymentService paymentService,
     IConfiguration config, IHubContext<NotificationHub> hubContext) : BaseApiController
 {
 
-    private readonly string _whSecret = config["StripeSettings:WhSecret"]!;
+    private readonly string _whsecret = config["stripeSettings:Whsecret"]!;
 
     [Authorize]
     [HttpPost("{cartId}")]
@@ -40,11 +40,9 @@ public class PaymentsController(IPaymentService paymentService,
     public async Task<IActionResult> StripeWebhook()
     {
         var json = await new StreamReader(Request.Body).ReadToEndAsync();
-
         try
         {
             var stripeEvent = ConstructStripeEvent(json);
-
             if (stripeEvent.Data.Object is not PaymentIntent intent)
             {
                 return BadRequest("Invalid event data");
@@ -56,43 +54,45 @@ public class PaymentsController(IPaymentService paymentService,
         }
         catch (StripeException ex)
         {
-            logger.LogError(ex, "stripe webhook error");
+            logger.LogError(ex, "An unexpected error occurred");
             return StatusCode(StatusCodes.Status500InternalServerError, "stripe webhook error");
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "An unexpected error occured");
-            return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occured");
+            logger.LogError(ex, "An unexpected error occurred");
+            return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred");
         }
-
     }
+
 
     private async Task HandlePaymentIntentSucceeded(PaymentIntent intent)
     {
-        if (intent.Status == "succeeded")
+
+        var spec = new OrderSpecification(intent.Id, true);
+        var order = await unit.Repository<Core.Entities.OrderAggregate.Order>().GetEntityWithSpec(spec);
+
+        if (order == null)
         {
-            var spec = new OrderSpecification(intent.Id, true);
+            throw new Exception("Order not found");
+        }
 
-            var order = await unit.Repository<Core.Entities.OrderAggregate.Order>().GetEntityWithSpec(spec)
-                ?? throw new Exception("Order not found");
+        var total = (long)order.GetTotal() * 100;
 
-            if ((long)order.GetTotal() * 100 != intent.Amount)
-            {
-                order.Status = OrderStatus.PaymentMismatch;
-            }
-            else
-            {
-                order.Status = OrderStatus.PaymentReceived;
-            }
+        if (total != intent.Amount)
+        {
+            order.Status = OrderStatus.PaymentMismatch;
+        }
+        else
+        {
+            order.Status = OrderStatus.PaymentReceived;
+        }
 
-            await unit.Complete();
+        await unit.Complete();
 
-            var connectionId = NotificationHub.GetConnectionIdByEmail(order.BuyerEmail);
-
-            if (!string.IsNullOrEmpty(connectionId))
-            {
-                await hubContext.Clients.Client(connectionId).SendAsync("OrderCompleteNotification", order.ToDto());
-            }
+        var connectionId = NotificationHub.GetConnectionIdByEmail(order.BuyerEmail);
+        if (!string.IsNullOrEmpty(connectionId))
+        {
+            await hubContext.Clients.Client(connectionId).SendAsync("OrderCompleteNotification", order.ToDto());
         }
     }
 
@@ -100,7 +100,7 @@ public class PaymentsController(IPaymentService paymentService,
     {
         try
         {
-            return EventUtility.ConstructEvent(json, Request.Headers["stripe-signature"], _whSecret);
+            return EventUtility.ConstructEvent(json, Request.Headers["stripe-signature"], _whsecret, throwOnApiVersionMismatch: false);
         }
         catch (Exception ex)
         {
