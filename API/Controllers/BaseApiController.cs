@@ -19,4 +19,17 @@ public class BaseApiController : ControllerBase
 
         return Ok(pagination);
     }
+
+    protected async Task<ActionResult> CreatePageResult<T, TDto>(IGenericRepository<T> repo, ISpecification<T> spec, int pageIndex, int pageSize, Func<T, TDto> toDto) where T 
+        : BaseEntity, IDtoConvertible
+    {
+        var items = await repo.ListAsync(spec);
+        var count = await repo.CountAsync(spec);
+
+        var dtoitems = items.Select(toDto).ToList();
+
+        var pagination = new Pagination<TDto>(pageIndex, pageSize, count, dtoitems);
+
+        return Ok(pagination);
+    }
 }
